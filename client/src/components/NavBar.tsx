@@ -1,53 +1,37 @@
-import { Building2, Plus } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
-import type { User } from "@db/schema";
-import { useUser } from "@/hooks/use-user";
+import { useUser } from "@/contexts/user";
 
-interface NavBarProps {
-  user: User | null;
-}
-
-export default function NavBar({ user }: NavBarProps) {
-  const [, setLocation] = useLocation();
-  const { logout } = useUser();
-
-  const handleLogout = async () => {
-    await logout();
-    setLocation("/");
-  };
+export default function NavBar() {
+  const { user, logout } = useUser();
 
   return (
-    <nav className="border-b bg-background">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setLocation("/")}>
-            <Building2 className="h-6 w-6 text-primary" />
-            <span className="font-bold text-xl">PropTools</span>
-          </div>
+    <nav className="border-b">
+      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <Link href="/">
+          <a className="text-xl font-bold">PropTools</a>
+        </Link>
 
-          <div className="flex items-center space-x-4">
-            {user ? (
-              <>
-                <Button 
-                  variant="outline"
-                  onClick={() => setLocation("/admin")}
-                  className="flex items-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Submit Tool
+        <div className="flex items-center space-x-4">
+          {user ? (
+            <>
+              <Button variant="ghost" asChild>
+                <Link href="/submit">Submit Tool</Link>
+              </Button>
+              {user.isAdmin && (
+                <Button variant="ghost" asChild>
+                  <Link href="/admin">Admin</Link>
                 </Button>
-                <span className="text-sm text-muted-foreground">
-                  Welcome, {user.username}
-                </span>
-                <Button variant="ghost" onClick={handleLogout}>
-                  Logout
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => setLocation("/auth")}>Sign In</Button>
-            )}
-          </div>
+              )}
+              <Button variant="ghost" onClick={logout}>
+                Logout
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" asChild>
+              <Link href="/auth">Login</Link>
+            </Button>
+          )}
         </div>
       </div>
     </nav>

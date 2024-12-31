@@ -8,6 +8,8 @@ import { promisify } from "util";
 import { users, insertUserSchema, type User as SelectUser } from "@db/schema";
 import { db } from "@db";
 import { eq } from "drizzle-orm";
+import { emailService } from './services/email';
+import { randomUUID } from "crypto";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -104,6 +106,7 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
+      console.log('Starting registration process');
       const result = insertUserSchema.safeParse(req.body);
       if (!result.success) {
         return res
@@ -114,6 +117,7 @@ export function setupAuth(app: Express) {
       const { username, password, firstName, lastName, email } = result.data;
 
       // Check if user already exists by username or email
+      console.log('Checking for existing user:', username);
       const [existingUser] = await db
         .select()
         .from(users)
@@ -135,7 +139,11 @@ export function setupAuth(app: Express) {
       }
 
       const hashedPassword = await crypto.hash(password);
+      const verificationToken = randomUUID();
+      const verificationTokenExpiry = new Date();
+      verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24);
 
+      console.log('Creating new user');
       const [newUser] = await db
         .insert(users)
         .values({
@@ -144,19 +152,34 @@ export function setupAuth(app: Express) {
           firstName,
           lastName,
           email,
+          isVerified: false,
+          verificationToken,
+          verificationTokenExpiry,
         })
         .returning();
+
+      console.log('Sending verification email');
+      const emailResult = await emailService.sendVerificationEmail(newUser.id, email);
+      console.log('Email sending result:', emailResult);
 
       req.login(newUser, (err) => {
         if (err) {
           return next(err);
         }
         return res.json({
-          message: "Registration successful",
-          user: newUser,
+          message: "Registration successful. Please check your email for verification instructions.",
+          user: {
+            id: newUser.id,
+            username: newUser.username,
+            firstName: newUser.firstName,
+            lastName: newUser.lastName,
+            email: newUser.email,
+            isVerified: newUser.isVerified,
+          },
         });
       });
     } catch (error) {
+      console.error('Detailed error in registration:', error);
       next(error);
     }
   });

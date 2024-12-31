@@ -2,8 +2,16 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { tools, upvotes, insertToolSchema } from "@db/schema";
+import { tools, upvotes, users, insertToolSchema } from "@db/schema";
 import { eq, desc, sql } from "drizzle-orm";
+import { emailService } from './services/email';
+import bcrypt from 'bcrypt';
+
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+  }
+}
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -124,6 +132,22 @@ export function registerRoutes(app: Express): Server {
       res.json({ message: "Upvote successful" });
     } catch (error) {
       res.status(500).json({ error: "Failed to upvote" });
+    }
+  });
+
+  // Email verification endpoint
+  app.get('/api/verify-email', async (req, res) => {
+    const { token } = req.query;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid token' });
+    }
+
+    const result = await emailService.verifyEmail(token);
+    if (result.success) {
+      return res.redirect('/auth?verified=true');
+    } else {
+      return res.redirect('/auth?verified=false&message=' + encodeURIComponent(result.message));
     }
   });
 

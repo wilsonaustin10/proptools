@@ -14,11 +14,9 @@ type RegisterData = LoginData & {
 };
 
 type RequestResult = {
-  ok: true;
+  ok: boolean;
   user?: User;
-} | {
-  ok: false;
-  message: string;
+  message?: string;
 };
 
 async function handleRequest(
@@ -44,7 +42,7 @@ async function handleRequest(
     }
 
     const data = await response.json();
-    return { ok: true, user: data.user };
+    return { ok: true, user: data.user, message: data.message };
   } catch (e: any) {
     return { ok: false, message: e.toString() };
   }
@@ -67,19 +65,16 @@ async function fetchUser(): Promise<User | null> {
 }
 
 export function useUser() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data: user, error, isLoading } = useQuery<User | null, Error>({
+  const { data: user, isLoading, error } = useQuery({
     queryKey: ['user'],
     queryFn: fetchUser,
-    staleTime: Infinity,
-    retry: false
   });
 
-  const loginMutation = useMutation({
-    mutationFn: (userData: LoginData) => 
-      handleRequest('/api/login', 'POST', userData),
+  const loginMutation = useMutation<RequestResult, Error, LoginData>({
+    mutationFn: (userData) => handleRequest('/api/login', 'POST', userData),
     onSuccess: (result) => {
       if (result.ok) {
         queryClient.invalidateQueries({ queryKey: ['user'] });
@@ -94,11 +89,10 @@ export function useUser() {
           description: result.message,
         });
       }
-      return result;
     },
   });
 
-  const logoutMutation = useMutation({
+  const logoutMutation = useMutation<RequestResult, Error>({
     mutationFn: () => handleRequest('/api/logout', 'POST'),
     onSuccess: (result) => {
       if (result.ok) {
@@ -117,15 +111,14 @@ export function useUser() {
     },
   });
 
-  const registerMutation = useMutation({
-    mutationFn: (userData: RegisterData) =>
-      handleRequest('/api/register', 'POST', userData),
+  const registerMutation = useMutation<RequestResult, Error, RegisterData>({
+    mutationFn: (userData) => handleRequest('/api/register', 'POST', userData),
     onSuccess: (result) => {
       if (result.ok) {
         queryClient.invalidateQueries({ queryKey: ['user'] });
         toast({
           title: "Success",
-          description: "Successfully registered",
+          description: result.message || "Successfully registered",
         });
       } else {
         toast({

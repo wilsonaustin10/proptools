@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ThumbsUp } from "lucide-react";
+import { ThumbsUp, Trophy } from "lucide-react";
 import type { Tool } from "@db/schema";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { cn } from "@/lib/utils";
 
 interface ToolCardProps {
   tool: Tool;
@@ -43,33 +44,37 @@ export default function ToolCard({ tool }: ToolCardProps) {
 
   return (
     <Card 
-      className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+      className={cn(
+        "overflow-hidden hover:shadow-lg transition-shadow cursor-pointer relative",
+        tool.featured && "border-primary"
+      )}
       onClick={() => setLocation(`/tools/${tool.id}`)}
     >
+      {tool.featured && (
+        <div className="absolute top-2 right-2">
+          <Badge variant="default" className="bg-primary flex items-center gap-1">
+            <Trophy className="w-3 h-3" />
+            Featured
+          </Badge>
+        </div>
+      )}
       <CardHeader className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            {tool.logo && (
-              <img
-                src={tool.logo}
-                alt={`${tool.name} logo`}
-                className="w-10 h-10 rounded-full"
-              />
-            )}
-            <div>
-              <h3 className="font-semibold text-lg">{tool.name}</h3>
-              <Badge variant="secondary">{tool.category}</Badge>
-            </div>
-          </div>
-          {tool.featured && (
-            <Badge variant="default" className="bg-primary">
-              Featured
-            </Badge>
+        <div className="flex items-center space-x-3">
+          {tool.logo && (
+            <img
+              src={tool.logo}
+              alt={`${tool.name} logo`}
+              className="w-10 h-10 rounded-full"
+            />
           )}
+          <div>
+            <h3 className="font-semibold text-lg">{tool.name}</h3>
+            <Badge variant="secondary">{tool.category}</Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-4 pt-0">
-        <p className="text-muted-foreground mb-4">{tool.description}</p>
+        <p className="text-muted-foreground mb-4 line-clamp-2">{tool.description}</p>
         <div className="flex items-center justify-between">
           <Button
             variant="outline"
@@ -82,7 +87,7 @@ export default function ToolCard({ tool }: ToolCardProps) {
             Visit Website
           </Button>
           <Button
-            variant="ghost"
+            variant={tool.upvotes && tool.upvotes > 0 ? "default" : "ghost"}
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
@@ -91,8 +96,11 @@ export default function ToolCard({ tool }: ToolCardProps) {
             disabled={!user || upvoteMutation.isPending}
             className="flex items-center gap-2"
           >
-            <ThumbsUp className="w-4 h-4" />
-            <span>{tool.upvotes}</span>
+            <ThumbsUp className={cn(
+              "w-4 h-4",
+              tool.upvotes && tool.upvotes > 0 && "text-white"
+            )} />
+            <span>{tool.upvotes ?? 0}</span>
           </Button>
         </div>
       </CardContent>

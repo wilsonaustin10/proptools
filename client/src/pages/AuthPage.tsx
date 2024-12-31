@@ -1,69 +1,95 @@
-import { useState } from "react";
+import { useEffect, useState } from 'react';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useUser } from "@/hooks/use-user";
-import { Building2, Shield } from "lucide-react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-
-const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-});
-
-const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
-type RegisterForm = z.infer<typeof registerSchema>;
+import { useUser } from "@/contexts/user";
+import { loginSchema, type LoginForm } from "@/lib/validations/auth";
+import { registerSchema, type RegisterForm } from "@/lib/validations/auth";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
-  const [isAdminLogin, setIsAdminLogin] = useState(false);
-  const { login, register } = useUser();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const { login, register } = useUser();
 
   const loginForm = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      username: isAdminLogin ? "admin@proptools.co" : "",
-      password: "",
-    },
   });
 
   const registerForm = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-      firstName: "",
-      lastName: "",
-      email: "",
-    },
   });
+
+  // Get verification status from URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const isVerified = searchParams.get('verified');
+  const verificationMessage = searchParams.get('message');
+
+  useEffect(() => {
+    if (isVerified === 'true') {
+      toast({
+        title: "Email verified",
+        description: "You can now log in to your account",
+      });
+      // Clear the URL parameters
+      window.history.replaceState({}, '', '/auth');
+    } else if (isVerified === 'false' && verificationMessage) {
+      toast({
+        title: "Verification failed",
+        description: decodeURIComponent(verificationMessage),
+        variant: "destructive",
+      });
+      // Clear the URL parameters
+      window.history.replaceState({}, '', '/auth');
+    }
+  }, [isVerified, verificationMessage, toast]);
 
   const handleSubmit = async (data: LoginForm | RegisterForm) => {
     try {
       if (isLogin) {
         const response = await login(data as LoginForm);
         if (response.ok) {
-          setLocation("/admin");
+          toast({
+            title: "Success",
+            description: "Logged in successfully",
+          });
+          setLocation("/");
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Invalid username or password",
+            variant: "destructive",
+          });
         }
       } else {
-        await register(data as RegisterForm);
-        setLocation("/admin");
+        const response = await register(data as RegisterForm);
+        if (response.ok) {
+          toast({
+            title: "Registration successful",
+            description: "Please check your email for verification instructions",
+          });
+          // Don't redirect immediately after registration
+          // Wait for email verification
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "Registration failed",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
-      console.error("Auth error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
     }
   };
 
@@ -72,35 +98,38 @@ export default function AuthPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
-            {isAdminLogin ? (
-              <Shield className="h-12 w-12 text-primary" />
-            ) : (
-              <Building2 className="h-12 w-12 text-primary" />
-            )}
+            <Building2 className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="text-2xl text-center font-bold">
-            {isLogin
-              ? isAdminLogin
-                ? "Admin Login"
-                : "Sign in to PropTools"
-              : "Create an account"}
+            {isLogin ? "Sign in to PropTools" : "Create an account"}
           </CardTitle>
+          <div className="flex justify-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation("/")}
+            >
+              Back to Home
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={
-            isLogin 
-              ? loginForm.handleSubmit(handleSubmit)
-              : registerForm.handleSubmit(handleSubmit)
-          } className="space-y-4">
+          <form
+            onSubmit={
+              isLogin
+                ? loginForm.handleSubmit(handleSubmit)
+                : registerForm.handleSubmit(handleSubmit)
+            }
+            className="space-y-4"
+          >
             <div className="space-y-2">
-              <Label htmlFor="username">
-                {isAdminLogin ? "Admin Username" : "Username"}
-              </Label>
+              <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
-                {...(isLogin ? loginForm : registerForm).register("username")}
-                className={isAdminLogin ? "border-primary" : ""}
-                defaultValue={isAdminLogin ? "admin@proptools.co" : ""}
+                {...(isLogin 
+                  ? loginForm.register("username")
+                  : registerForm.register("username")
+                )}
               />
               {(isLogin ? loginForm : registerForm).formState.errors.username && (
                 <p className="text-sm text-red-500">
@@ -154,14 +183,14 @@ export default function AuthPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="password">
-                {isAdminLogin ? "Admin Password" : "Password"}
-              </Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
-                {...(isLogin ? loginForm : registerForm).register("password")}
-                className={isAdminLogin ? "border-primary" : ""}
+                {...(isLogin 
+                  ? loginForm.register("password")
+                  : registerForm.register("password")
+                )}
               />
               {(isLogin ? loginForm : registerForm).formState.errors.password && (
                 <p className="text-sm text-red-500">
@@ -170,47 +199,20 @@ export default function AuthPage() {
               )}
             </div>
 
-            <Button 
-              type="submit" 
-              className={`w-full ${isAdminLogin ? "bg-primary hover:bg-primary/90" : ""}`}
-            >
-              {isLogin ? (isAdminLogin ? "Admin Sign In" : "Sign In") : "Sign Up"}
+            <Button type="submit" className="w-full">
+              {isLogin ? "Sign In" : "Sign Up"}
             </Button>
+
+            <div className="text-center">
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setIsLogin(!isLogin)}
+              >
+                {isLogin ? "Need an account? Sign up" : "Already have an account? Sign in"}
+              </Button>
+            </div>
           </form>
-
-          <div className="mt-4 text-center space-y-2">
-            {!isAdminLogin && (
-              <Button
-                variant="link"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  loginForm.reset();
-                  registerForm.reset();
-                }}
-                className="text-sm"
-              >
-                {isLogin
-                  ? "Don't have an account? Sign up"
-                  : "Already have an account? Sign in"}
-              </Button>
-            )}
-
-            {isLogin && (
-              <Button
-                variant="link"
-                onClick={() => {
-                  setIsAdminLogin(!isAdminLogin);
-                  loginForm.reset({
-                    username: !isAdminLogin ? "admin@proptools.co" : "",
-                    password: "",
-                  });
-                }}
-                className="text-sm text-muted-foreground"
-              >
-                {isAdminLogin ? "Switch to User Login" : "Admin Login"}
-              </Button>
-            )}
-          </div>
         </CardContent>
       </Card>
     </div>
