@@ -152,5 +152,155 @@ export function registerRoutes(app: Express): Server {
   });
 
   const httpServer = createServer(app);
+  // Create a review
+  app.post("/api/reviews", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Must be logged in to write a review" });
+    }
+
+    try {
+      const result = insertReviewSchema.safeParse({
+        ...req.body,
+        userId: req.user!.id,
+      });
+
+      if (!result.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid input: " + result.error.issues.map(i => i.message).join(", ") });
+      }
+
+      const [newReview] = await db
+        .insert(reviews)
+        .values(result.data)
+        .returning();
+
+      res.json(newReview);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create review" });
+    }
+  });
+
+  // Get reviews for a tool
+  app.get("/api/reviews/tool/:toolId", async (req, res) => {
+    try {
+      const toolReviews = await db.query.reviews.findMany({
+        where: eq(reviews.toolId, parseInt(req.params.toolId)),
+        with: {
+          user: true,
+        },
+        orderBy: [desc(reviews.helpfulCount), desc(reviews.createdAt)],
+      });
+      res.json(toolReviews);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reviews" });
+    }
+  });
+
+  // Update a review
+  app.put("/api/reviews/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Must be logged in to update a review" });
+    }
+
+    try {
+      const [review] = await db
+        .select()
+        .from(reviews)
+        .where(eq(reviews.id, parseInt(req.params.id)))
+        .limit(1);
+
+      if (!review) {
+        return res.status(404).json({ error: "Review not found" });
+      }
+
+      if (review.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Can only update your own reviews" });
+      }
+
+      const result = insertReviewSchema.safeParse(req.body);
+      if (!result.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid input: " + result.error.issues.map(i => i.message).join(", ") });
+      }
+
+      const [updatedReview] = await db
+        .update(reviews)
+        .set(result.data)
+        .where(eq(reviews.id, review.id))
+        .returning();
+
+      res.json(updatedReview);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update review" });
+    }
+  });
+
+  // Delete a review
+  app.delete("/api/reviews/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Must be logged in to delete a review" });
+    }
+
+    try {
+      const [review] = await db
+        .select()
+        .from(reviews)
+        .where(eq(reviews.id, parseInt(req.params.id)))
+        .limit(1);
+
+      if (!review) {
+        return res.status(404).json({ error: "Review not found" });
+      }
+
+      if (review.userId !== req.user!.id && !req.user?.isAdmin) {
+        return res.status(403).json({ error: "Can only delete your own reviews" });
+      }
+
+      await db.delete(reviews).where(eq(reviews.id, review.id));
+
+      res.json({ message: "Review deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete review" });
+    }
+  });
+
+  // Mark a review as helpful
+  app.post("/api/reviews/:id/helpful", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Must be logged in to mark reviews as helpful" });
+    }
+
+    const reviewId = parseInt(req.params.id);
+    const userId = req.user!.id;
+
+    try {
+      // Check if user has already marked this review as helpful
+      const [existingVote] = await db
+        .select()
+        .from(helpfulVotes)
+        .where(sql`${helpfulVotes.userId} = ${userId} AND ${helpfulVotes.reviewId} = ${reviewId}`)
+        .limit(1);
+
+      if (existingVote) {
+        return res.status(400).json({ error: "Already marked as helpful" });
+      }
+
+      // Create helpful vote and increment review's helpful count
+      await db.transaction(async (tx) => {
+        await tx.insert(helpfulVotes).values({ userId, reviewId });
+        await tx
+          .update(reviews)
+          .set({ helpfulCount: sql`${reviews.helpfulCount} + 1` })
+          .where(eq(reviews.id, reviewId));
+      });
+
+      res.json({ message: "Marked as helpful" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark review as helpful" });
+    }
+  });
+
   return httpServer;
 }

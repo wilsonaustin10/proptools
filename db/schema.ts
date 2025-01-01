@@ -40,11 +40,13 @@ export const toolsRelations = relations(tools, ({ many }) => ({
   upvotes: many(upvotes),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many }: { many: any }) => ({
   upvotes: many(upvotes),
+  reviews: many(reviews),
+  helpfulVotes: many(helpfulVotes),
 }));
 
-export const upvotesRelations = relations(upvotes, ({ one }) => ({
+export const upvotesRelations = relations(upvotes, ({ one }: { one: any }) => ({
   user: one(users, {
     fields: [upvotes.userId],
     references: [users.id],
@@ -72,3 +74,58 @@ export const insertToolSchema = createInsertSchema(tools);
 export const selectToolSchema = createSelectSchema(tools);
 export type Tool = typeof tools.$inferSelect;
 export type NewTool = typeof tools.$inferInsert;
+
+export const reviews = pgTable("reviews", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  toolId: integer("tool_id").references(() => tools.id).notNull(),
+  rating: integer("rating").notNull(),
+  content: text("content").notNull(),
+  pros: text("pros").notNull(),
+  cons: text("cons").notNull(),
+  helpfulCount: integer("helpful_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const helpfulVotes = pgTable("helpful_votes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  reviewId: integer("review_id").references(() => reviews.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const reviewsRelations = relations(reviews, ({ one, many }: { one: any; many: any }) => ({
+  user: one(users, {
+    fields: [reviews.userId],
+    references: [users.id],
+  }),
+  tool: one(tools, {
+    fields: [reviews.toolId],
+    references: [tools.id],
+  }),
+  helpfulVotes: many(helpfulVotes),
+}));
+
+export const helpfulVotesRelations = relations(helpfulVotes, ({ one }: { one: any }) => ({
+  user: one(users, {
+    fields: [helpfulVotes.userId],
+    references: [users.id],
+  }),
+  review: one(reviews, {
+    fields: [helpfulVotes.reviewId],
+    references: [reviews.id],
+  }),
+}));
+
+
+
+export const insertReviewSchema = createInsertSchema(reviews, {
+  rating: z.number().min(1).max(5),
+  content: z.string().min(10, "Review must be at least 10 characters"),
+  pros: z.string().min(1, "Must include at least one pro"),
+  cons: z.string().min(1, "Must include at least one con"),
+});
+
+export const selectReviewSchema = createSelectSchema(reviews);
+export type Review = typeof reviews.$inferSelect;
+export type NewReview = typeof reviews.$inferInsert;

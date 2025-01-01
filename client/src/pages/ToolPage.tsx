@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, ThumbsUp } from "lucide-react";
+import { ReviewForm } from "../components/ReviewForm";
+import { ReviewList } from "../components/ReviewList";
 import type { Tool } from "@db/schema";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
@@ -129,6 +131,22 @@ export default function ToolPage({ params }: { params: { id: string } }) {
               <ThumbsUp className="w-4 h-4" />
               {tool.upvotes} Upvotes
             </Button>
+          </div>
+
+          <div className="space-y-8 mt-8">
+            <h2 className="text-2xl font-bold">Reviews</h2>
+            {user ? (
+              <ReviewForm toolId={tool.id} />
+            ) : (
+              <Card>
+                <CardContent className="p-6">
+                  <p className="text-center text-muted-foreground">
+                    Please sign in to write a review
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+            <ReviewList toolId={tool.id} />
           </div>
         </CardContent>
       </Card>
