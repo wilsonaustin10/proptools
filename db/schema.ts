@@ -119,6 +119,45 @@ export const helpfulVotesRelations = relations(helpfulVotes, ({ one }: { one: an
 
 
 
+export const groups = pgTable("groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdById: integer("created_by_id").references(() => users.id).notNull(),
+});
+
+export const groupMembers = pgTable("group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").references(() => groups.id).notNull(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export const groupsRelations = relations(groups, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [groups.createdById],
+    references: [users.id],
+  }),
+  members: many(groupMembers),
+}));
+
+export const groupMembersRelations = relations(groupMembers, ({ one }) => ({
+  group: one(groups, {
+    fields: [groupMembers.groupId],
+    references: [groups.id],
+  }),
+  user: one(users, {
+    fields: [groupMembers.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertGroupSchema = createInsertSchema(groups, {
+  name: z.string().min(3, "Group name must be at least 3 characters"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+});
+
 export const insertReviewSchema = createInsertSchema(reviews, {
   rating: z.number().min(1).max(5),
   content: z.string().min(10, "Review must be at least 10 characters"),

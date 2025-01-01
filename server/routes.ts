@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { tools, upvotes, users, insertToolSchema } from "@db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { tools, upvotes, users, insertToolSchema, reviews, helpfulVotes, insertReviewSchema, groups, groupMembers, insertGroupSchema } from "@db/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { emailService } from './services/email';
 import bcrypt from 'bcrypt';
 
@@ -152,6 +152,218 @@ export function registerRoutes(app: Express): Server {
   });
 
   const httpServer = createServer(app);
+
+  // Tool comparison endpoint
+  app.get("/api/tools/compare", async (req, res) => {
+    try {
+      const toolIds = (req.query.ids as string || "").split(",").map(id => parseInt(id));
+      
+      if (!toolIds.length || toolIds.some(isNaN)) {
+        return res.status(400).json({ error: "Invalid tool IDs provided" });
+      }
+
+      const toolsToCompare = await db.query.tools.findMany({
+        where: sql`${tools.id} IN (${sql.join(toolIds, sql`, `)})`,
+        with: {
+          upvotes: true,
+        },
+      });
+
+      if (toolsToCompare.length !== toolIds.length) {
+        return res.status(404).json({ error: "One or more tools not found" });
+      }
+
+      res.json(toolsToCompare);
+    } catch (error) {
+      console.error("Error comparing tools:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // User verification endpoint (admin only)
+  app.put("/api/admin/users/:id/verify", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user?.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized - Admin access required" });
+    }
+
+    try {
+      const userId = parseInt(req.params.id);
+      const { isVerified } = req.body;
+
+      if (typeof isVerified !== "boolean") {
+        return res.status(400).json({ error: "Invalid verification status" });
+      }
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({ isVerified })
+        .where(eq(users.id, userId))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user verification status:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new group
+  app.post("/api/groups", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Must be logged in to create a group" });
+    }
+
+    try {
+      const validationResult = insertGroupSchema.safeParse(req.body);
+
+      if (!validationResult.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid input: " + validationResult.error.issues.map(i => i.message).join(", ") });
+      }
+
+      type NewGroup = typeof groups.$inferInsert;
+      const groupData: NewGroup = {
+        name: validationResult.data.name,
+        description: validationResult.data.description,
+        createdById: req.user!.id,
+      };
+
+      const [newGroup] = await db
+        .insert(groups)
+        .values(groupData)
+        .returning();
+
+      // Automatically add creator as a member
+      await db.insert(groupMembers).values({
+        userId: req.user!.id,
+        groupId: newGroup.id,
+      });
+
+      res.json(newGroup);
+    } catch (error) {
+      console.error("Error creating group:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Community Groups endpoints
+  app.get("/api/groups", async (_req, res) => {
+    try {
+      const allGroups = await db.query.groups.findMany({
+        with: {
+          creator: {
+            columns: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          members: {
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      res.json(allGroups);
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/groups/:id", async (req, res) => {
+    try {
+      const group = await db.query.groups.findFirst({
+        where: eq(groups.id, parseInt(req.params.id)),
+        with: {
+          creator: {
+            columns: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          members: {
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+
+      res.json(group);
+    } catch (error) {
+      console.error("Error fetching group:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/groups/:id/join", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const group = await db.query.groups.findFirst({
+        where: eq(groups.id, parseInt(id)),
+      });
+
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+
+      const existingMembership = await db.query.groupMembers.findFirst({
+        where: and(
+          eq(groupMembers.userId, userId),
+          eq(groupMembers.groupId, parseInt(id))
+        ),
+      });
+
+      if (existingMembership) {
+        return res.status(400).json({ error: "Already a member of this group" });
+      }
+
+      await db.insert(groupMembers).values({
+        userId,
+        groupId: parseInt(id),
+      });
+
+      res.status(200).json({ message: "Successfully joined the group" });
+    } catch (error) {
+      console.error("Error joining group:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
   // Create a review
   app.post("/api/reviews", async (req, res) => {
     if (!req.isAuthenticated()) {
