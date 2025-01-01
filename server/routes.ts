@@ -371,20 +371,31 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      const result = insertReviewSchema.safeParse({
+      const validationResult = insertReviewSchema.safeParse({
         ...req.body,
         userId: req.user!.id,
       });
 
-      if (!result.success) {
+      if (!validationResult.success) {
         return res
           .status(400)
-          .json({ error: "Invalid input: " + result.error.issues.map(i => i.message).join(", ") });
+          .json({ error: "Invalid input: " + validationResult.error.issues.map(i => i.message).join(", ") });
       }
+
+      type NewReview = typeof reviews.$inferInsert;
+      const reviewData: NewReview = {
+        userId: req.user!.id,
+        toolId: parseInt(validationResult.data.toolId.toString()),
+        rating: validationResult.data.rating,
+        content: validationResult.data.content,
+        pros: validationResult.data.pros,
+        cons: validationResult.data.cons,
+        helpfulCount: 0,
+      };
 
       const [newReview] = await db
         .insert(reviews)
-        .values(result.data)
+        .values(reviewData)
         .returning();
 
       res.json(newReview);
@@ -430,16 +441,24 @@ export function registerRoutes(app: Express): Server {
         return res.status(403).json({ error: "Can only update your own reviews" });
       }
 
-      const result = insertReviewSchema.safeParse(req.body);
-      if (!result.success) {
+      const validationResult = insertReviewSchema.safeParse(req.body);
+      if (!validationResult.success) {
         return res
           .status(400)
-          .json({ error: "Invalid input: " + result.error.issues.map(i => i.message).join(", ") });
+          .json({ error: "Invalid input: " + validationResult.error.issues.map(i => i.message).join(", ") });
       }
+
+      type ReviewUpdate = Partial<typeof reviews.$inferInsert>;
+      const reviewData: ReviewUpdate = {
+        rating: validationResult.data.rating,
+        content: validationResult.data.content,
+        pros: validationResult.data.pros,
+        cons: validationResult.data.cons,
+      };
 
       const [updatedReview] = await db
         .update(reviews)
-        .set(result.data)
+        .set(reviewData)
         .where(eq(reviews.id, review.id))
         .returning();
 
