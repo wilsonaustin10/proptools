@@ -6,6 +6,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: {
+      NODE_ENV: 'test'
+    },
+    setupFiles: ['dotenv/config', 'tests/setup.ts'],
     coverage: {
       enabled: true,
       provider: 'v8',
@@ -26,7 +30,6 @@ export default defineConfig({
       }
     },
     include: ['tests/**/*.test.ts'],
-    setupFiles: ['tests/setup.ts'],
   },
   resolve: {
     alias: {

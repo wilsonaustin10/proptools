@@ -1,8 +1,13 @@
 import { afterAll, afterEach, beforeAll } from 'vitest';
+import { config } from 'dotenv';
+import { resolve } from 'path';
 import { db } from '../db';
 import { users, reviews, tools } from '../db/schema';
 import { createApp } from '../server';
 import { type Express } from 'express';
+
+// Load test environment variables
+config({ path: resolve(__dirname, '../.env.test') });
 
 declare global {
   // eslint-disable-next-line no-var
