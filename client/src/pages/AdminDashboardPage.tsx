@@ -12,7 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import type { NewTool } from "@db/schema";
+import type { Tool } from "../../../shared/types/tool";
 
 const toolSchema = z.object({
   name: z.string().min(1, "Tool name is required"),
@@ -22,7 +22,7 @@ const toolSchema = z.object({
   logo: z.string().optional(),
 });
 
-type ToolForm = z.infer<typeof toolSchema>;
+type ToolForm = Pick<Tool, "name" | "description" | "website" | "category" | "logo">;
 
 export default function AdminDashboardPage() {
   const { user, isLoading } = useUser();
@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
   });
 
   const addToolMutation = useMutation({
-    mutationFn: async (data: NewTool) => {
+    mutationFn: async (data: Pick<Tool, "name" | "description" | "website" | "category" | "logo">) => {
       const response = await fetch("/api/tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

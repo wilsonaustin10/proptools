@@ -1,6 +1,6 @@
 import passport from "passport";
 import { IVerifyOptions, Strategy as LocalStrategy } from "passport-local";
-import { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -93,18 +93,25 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      const [user] = await db
+      const result = await db
         .select()
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
+      
+      const user = result[0];
+      if (!user) {
+        return done(null, false);
+      }
       done(null, user);
     } catch (err) {
       done(err);
     }
   });
 
-  app.post("/api/register", async (req, res, next) => {
+  const router = express.Router();
+
+  router.post("/register", async (req: Request, res: Response, next: NextFunction) => {
     try {
       console.log('Starting registration process');
       const result = insertUserSchema.safeParse(req.body);
@@ -184,7 +191,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
+  router.post("/login", (req: Request, res: Response, next: NextFunction) => {
     passport.authenticate("local", (err: any, user: SelectUser | false, info: IVerifyOptions) => {
       if (err) {
         return next(err);
@@ -207,7 +214,7 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  app.post("/api/logout", (req, res) => {
+  router.post("/logout", (req: Request, res: Response) => {
     req.logout((err) => {
       if (err) {
         return res.status(500).send("Logout failed");
@@ -217,7 +224,7 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.get("/api/user", (req, res) => {
+  router.get("/user", (req: Request, res: Response) => {
     if (!req.session) {
       return res.status(500).send("Session not initialized");
     }
@@ -229,4 +236,6 @@ export function setupAuth(app: Express) {
 
     res.status(401).send("Not logged in");
   });
+
+  return router;
 }

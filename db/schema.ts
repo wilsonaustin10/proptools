@@ -168,3 +168,5 @@ export const insertReviewSchema = createInsertSchema(reviews, {
 export const selectReviewSchema = createSelectSchema(reviews);
 export type Review = typeof reviews.$inferSelect;
 export type NewReview = typeof reviews.$inferInsert;
+export type HelpfulVote = typeof helpfulVotes.$inferSelect;
+export type NewHelpfulVote = typeof helpfulVotes.$inferInsert;

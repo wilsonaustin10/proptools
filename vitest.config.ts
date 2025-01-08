@@ -37,6 +37,8 @@ export default defineConfig({
       '@db': path.resolve(__dirname, './db'),
       '@server': path.resolve(__dirname, './server'),
       '@client': path.resolve(__dirname, './client/src'),
+      '@tests': path.resolve(__dirname, './tests'),
+      '@shared': path.resolve(__dirname, './shared'),
     },
   },
 });

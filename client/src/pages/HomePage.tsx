@@ -4,7 +4,7 @@ import HeroSection from "@/components/HeroSection";
 import SearchBar from "@/components/SearchBar";
 import CategoryFilter from "@/components/CategoryFilter";
 import ToolCard from "@/components/ToolCard";
-import { Tool } from "@db/schema";
+import type { Tool } from "../../../shared/types/tool";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 

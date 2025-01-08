@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, ThumbsUp } from "lucide-react";
 import { ReviewForm } from "../components/ReviewForm";
 import { ReviewList } from "../components/ReviewList";
-import type { Tool } from "@db/schema";
+import type { Tool } from "../../../shared/types/tool";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";

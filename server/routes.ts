@@ -1,9 +1,8 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { setupAuth } from "./auth";
+import express, { type Express, Router } from "express";
 import { db } from "@db";
 import { tools, upvotes, users, insertToolSchema, reviews, helpfulVotes, insertReviewSchema, groups, groupMembers, insertGroupSchema } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
+import { DatabaseError } from "../shared/errors/database";
 import { emailService } from './services/email';
 import bcrypt from 'bcrypt';
 
@@ -13,11 +12,17 @@ declare module 'express-session' {
   }
 }
 
-export function registerRoutes(app: Express): Server {
-  setupAuth(app);
+export function registerRoutes(app: Express): Router {
+  if (!app) throw new Error("Express app is required");
+  console.log('Registering routes...');
+  // Create router for API routes
+  const router = Router();
+  console.log('Setting up routes with Router...');
+  
+  // Note: Routes will be mounted under /api prefix in server/index.ts
 
   // Add a new tool (admin only)
-  app.post("/api/tools", async (req, res) => {
+  router.post("/tools", async (req, res) => {
     if (!req.isAuthenticated() || !req.user?.isAdmin) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -42,7 +47,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Get all tools
-  app.get("/api/tools", async (_req, res) => {
+  router.get("/tools", async (_req, res) => {
     try {
       const allTools = await db.query.tools.findMany({
         orderBy: [desc(tools.upvotes)],
@@ -53,8 +58,36 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Search tools
+  router.get("/tools/search", async (req, res) => {
+    const query = req.query.q as string;
+    try {
+      const searchResults = await db.query.tools.findMany({
+        where: sql`${tools.name} ILIKE ${`%${query}%`} OR ${
+          tools.description
+        } ILIKE ${`%${query}%`}`,
+      });
+      res.json(searchResults);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search tools" });
+    }
+  });
+
+  // Get tools by category
+  router.get("/tools/category/:category", async (req, res) => {
+    try {
+      const categoryTools = await db.query.tools.findMany({
+        where: eq(tools.category, req.params.category),
+        orderBy: [desc(tools.upvotes)],
+      });
+      res.json(categoryTools);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tools by category" });
+    }
+  });
+
   // Get a single tool by ID
-  app.get("/api/tools/:id", async (req, res) => {
+  router.get("/tools/:id", async (req, res) => {
     try {
       const [tool] = await db.query.tools.findMany({
         where: eq(tools.id, parseInt(req.params.id)),
@@ -71,36 +104,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get tools by category
-  app.get("/api/tools/category/:category", async (req, res) => {
-    try {
-      const categoryTools = await db.query.tools.findMany({
-        where: eq(tools.category, req.params.category),
-        orderBy: [desc(tools.upvotes)],
-      });
-      res.json(categoryTools);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch tools by category" });
-    }
-  });
-
-  // Search tools
-  app.get("/api/tools/search", async (req, res) => {
-    const query = req.query.q as string;
-    try {
-      const searchResults = await db.query.tools.findMany({
-        where: sql`${tools.name} ILIKE ${`%${query}%`} OR ${
-          tools.description
-        } ILIKE ${`%${query}%`}`,
-      });
-      res.json(searchResults);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to search tools" });
-    }
-  });
-
   // Upvote a tool
-  app.post("/api/tools/:id/upvote", async (req, res) => {
+  router.post("/tools/:id/upvote", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to upvote" });
     }
@@ -136,7 +141,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Email verification endpoint
-  app.get('/api/verify-email', async (req, res) => {
+  router.get('/verify-email', async (req, res) => {
     const { token } = req.query;
 
     if (!token || typeof token !== 'string') {
@@ -151,10 +156,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  const httpServer = createServer(app);
-
   // Tool comparison endpoint
-  app.get("/api/tools/compare", async (req, res) => {
+  router.get("/tools/compare", async (req, res) => {
     try {
       const toolIds = (req.query.ids as string || "").split(",").map(id => parseInt(id));
       
@@ -181,7 +184,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // User verification endpoint (admin only)
-  app.put("/api/admin/users/:id/verify", async (req, res) => {
+  router.put("/admin/users/:id/verify", async (req, res) => {
     if (!req.isAuthenticated() || !req.user?.isAdmin) {
       return res.status(401).json({ error: "Unauthorized - Admin access required" });
     }
@@ -212,7 +215,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Create a new group
-  app.post("/api/groups", async (req, res) => {
+  router.post("/groups", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to create a group" });
     }
@@ -252,7 +255,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Community Groups endpoints
-  app.get("/api/groups", async (_req, res) => {
+  router.get("/groups", async (_req, res) => {
     try {
       const allGroups = await db.query.groups.findMany({
         with: {
@@ -286,7 +289,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/groups/:id", async (req, res) => {
+  router.get("/groups/:id", async (req, res) => {
     try {
       const group = await db.query.groups.findFirst({
         where: eq(groups.id, parseInt(req.params.id)),
@@ -325,7 +328,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/groups/:id/join", async (req, res) => {
+  router.post("/groups/:id/join", async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
@@ -364,13 +367,21 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+  console.log('Setting up review routes...');
+
   // Create a review
-  app.post("/api/reviews", async (req, res) => {
+  router.post("/reviews", async (req, res, next) => {
+    // Check authentication
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to write a review" });
     }
 
     try {
+      if (!req.body || typeof req.body !== 'object') {
+        console.error('Invalid request body:', req.body);
+        return res.status(400).json({ error: "Invalid request body" });
+      }
+
       const validationResult = insertReviewSchema.safeParse({
         ...req.body,
         userId: req.user!.id,
@@ -393,59 +404,104 @@ export function registerRoutes(app: Express): Server {
         helpfulCount: 0,
       };
 
-      const [newReview] = await db
-        .insert(reviews)
-        .values(reviewData)
-        .returning();
+      const newReview = await db.transaction(async (tx) => {
+        // Check if tool exists
+        const tool = await tx.query.tools.findFirst({
+          where: eq(tools.id, reviewData.toolId)
+        });
+
+        if (!tool) {
+          throw new DatabaseError("Tool not found", "NOT_FOUND");
+        }
+
+        // Check for existing review
+        const existingReview = await tx.query.reviews.findFirst({
+          where: and(
+            eq(reviews.userId, reviewData.userId),
+            eq(reviews.toolId, reviewData.toolId)
+          )
+        });
+
+        if (existingReview) {
+          throw new DatabaseError("You have already reviewed this tool", "CONFLICT");
+        }
+
+        const insertResult = await tx.insert(reviews)
+          .values(reviewData)
+          .returning();
+        
+        if (!insertResult || insertResult.length === 0) {
+          throw new DatabaseError("Failed to create review", "INTERNAL_ERROR");
+        }
+        
+        return insertResult[0];
+      });
 
       res.json(newReview);
     } catch (error) {
-      res.status(500).json({ error: "Failed to create review" });
+      // Let the global error handler handle DatabaseErrors
+      next(error);
     }
   });
 
   // Get reviews for a tool
-  app.get("/api/reviews/tool/:toolId", async (req, res) => {
+  router.get("/reviews/tool/:toolId", async (req, res, next) => {
     try {
-      const toolReviews = await db.query.reviews.findMany({
-        where: eq(reviews.toolId, parseInt(req.params.toolId)),
-        with: {
-          user: true,
-        },
-        orderBy: [desc(reviews.helpfulCount), desc(reviews.createdAt)],
+      const toolId = parseInt(req.params.toolId);
+      if (isNaN(toolId)) {
+        return res.status(400).json({ error: "Invalid tool ID" });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        // Check if tool exists
+        const tool = await tx.query.tools.findFirst({
+          where: eq(tools.id, toolId)
+        });
+
+        if (!tool) {
+          throw new DatabaseError("Tool not found", "NOT_FOUND");
+        }
+
+        const reviewsList = await tx.query.reviews.findMany({
+          where: eq(reviews.toolId, toolId),
+          with: {
+            user: true,
+          },
+          orderBy: [desc(reviews.helpfulCount), desc(reviews.createdAt)],
+        });
+        
+        return reviewsList || [];
       });
-      res.json(toolReviews);
+      
+      res.json(result);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch reviews" });
+      // Let the global error handler handle DatabaseErrors
+      next(error);
     }
   });
 
   // Update a review
-  app.put("/api/reviews/:id", async (req, res) => {
+  router.put("/reviews/:id", async (req, res, next) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to update a review" });
     }
 
     try {
-      const [review] = await db
-        .select()
-        .from(reviews)
-        .where(eq(reviews.id, parseInt(req.params.id)))
-        .limit(1);
-
-      if (!review) {
-        return res.status(404).json({ error: "Review not found" });
+      const reviewId = parseInt(req.params.id);
+      if (isNaN(reviewId)) {
+        return res.status(400).json({ error: "Invalid review ID" });
       }
 
-      if (review.userId !== req.user!.id) {
-        return res.status(403).json({ error: "Can only update your own reviews" });
-      }
-
-      const validationResult = insertReviewSchema.safeParse(req.body);
+      const validationResult = insertReviewSchema.safeParse({
+        ...req.body,
+        userId: req.user!.id,
+        toolId: 1 // Use a dummy value since we don't need to validate toolId for updates
+      });
+      
       if (!validationResult.success) {
-        return res
-          .status(400)
-          .json({ error: "Invalid input: " + validationResult.error.issues.map(i => i.message).join(", ") });
+        return res.status(400).json({ 
+          error: "Invalid input: " + validationResult.error.issues.map(i => i.message).join(", ") 
+        });
       }
 
       type ReviewUpdate = Partial<typeof reviews.$inferInsert>;
@@ -456,82 +512,190 @@ export function registerRoutes(app: Express): Server {
         cons: validationResult.data.cons,
       };
 
-      const [updatedReview] = await db
-        .update(reviews)
-        .set(reviewData)
-        .where(eq(reviews.id, review.id))
-        .returning();
+      const updatedReview = await db.transaction(async (tx) => {
+        const review = await tx.query.reviews.findFirst({
+          where: eq(reviews.id, reviewId)
+        });
+
+        if (!review) {
+          throw new DatabaseError("Review not found", "NOT_FOUND");
+        }
+
+        if (review.userId !== req.user!.id) {
+          throw new DatabaseError("Can only update your own reviews", "FORBIDDEN");
+        }
+
+        const updateResult = await tx
+          .update(reviews)
+          .set(reviewData)
+          .where(eq(reviews.id, review.id))
+          .returning();
+
+        if (!updateResult || updateResult.length === 0) {
+          throw new DatabaseError("Failed to update review", "INTERNAL_ERROR");
+        }
+        
+        return updateResult[0];
+      });
 
       res.json(updatedReview);
     } catch (error) {
-      res.status(500).json({ error: "Failed to update review" });
+      // Let the global error handler handle DatabaseErrors
+      next(error);
     }
   });
 
   // Delete a review
-  app.delete("/api/reviews/:id", async (req, res) => {
+  router.delete("/reviews/:id", async (req, res, next) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to delete a review" });
     }
 
+    const reviewId = parseInt(req.params.id);
+    if (isNaN(reviewId)) {
+      return res.status(400).json({ error: "Invalid review ID" });
+    }
+
     try {
-      const [review] = await db
-        .select()
-        .from(reviews)
-        .where(eq(reviews.id, parseInt(req.params.id)))
-        .limit(1);
+      // Delete review and helpful votes in a transaction
+      const deletedReview = await db.transaction(async (tx) => {
+        // Check if review exists and user has permission inside transaction
+        const existingReview = await tx.query.reviews.findFirst({
+          where: eq(reviews.id, reviewId)
+        });
 
-      if (!review) {
-        return res.status(404).json({ error: "Review not found" });
-      }
+        if (!existingReview) {
+          throw new DatabaseError("Review not found", "NOT_FOUND");
+        }
 
-      if (review.userId !== req.user!.id && !req.user?.isAdmin) {
-        return res.status(403).json({ error: "Can only delete your own reviews" });
-      }
+        if (existingReview.userId !== req.user!.id && !req.user?.isAdmin) {
+          throw new DatabaseError("Can only delete your own reviews", "FORBIDDEN");
+        }
 
-      await db.delete(reviews).where(eq(reviews.id, review.id));
+        // Delete helpful votes first
+        await tx
+          .delete(helpfulVotes)
+          .where(eq(helpfulVotes.reviewId, reviewId));
 
-      res.json({ message: "Review deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete review" });
+        // Then delete the review
+        const deleted = await tx
+          .delete(reviews)
+          .where(eq(reviews.id, reviewId))
+          .returning();
+
+        if (!deleted || deleted.length === 0) {
+          throw new DatabaseError("Failed to delete review", "INTERNAL_ERROR");
+        }
+
+        return deleted[0];
+      });
+
+      res.json(deletedReview);
+    } catch (error: unknown) {
+      // Log detailed error information for DELETE /reviews/:id
+      console.error('Error in DELETE /reviews/:id:', {
+        error,
+        stack: error instanceof Error ? error.stack : undefined,
+        reviewId,
+        userId: req.user?.id,
+        isAuthenticated: req.isAuthenticated(),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        isDatabaseError: error instanceof DatabaseError,
+        errorCode: error instanceof DatabaseError ? error.code : undefined,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      next(error);
     }
   });
 
   // Mark a review as helpful
-  app.post("/api/reviews/:id/helpful", async (req, res) => {
+  router.post("/reviews/:id/helpful", async (req, res, next) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to mark reviews as helpful" });
     }
 
     const reviewId = parseInt(req.params.id);
+    if (isNaN(reviewId)) {
+      return res.status(400).json({ error: "Invalid review ID" });
+    }
+
     const userId = req.user!.id;
 
     try {
-      // Check if user has already marked this review as helpful
-      const [existingVote] = await db
-        .select()
-        .from(helpfulVotes)
-        .where(sql`${helpfulVotes.userId} = ${userId} AND ${helpfulVotes.reviewId} = ${reviewId}`)
-        .limit(1);
+      // Create helpful vote and update review count in a transaction
+      const result = await db.transaction(async (tx) => {
+        // Check if review exists inside transaction
+        const existingReview = await tx.query.reviews.findFirst({
+          where: eq(reviews.id, reviewId)
+        });
 
-      if (existingVote) {
-        return res.status(400).json({ error: "Already marked as helpful" });
-      }
+        if (!existingReview) {
+          throw new DatabaseError("Review not found", "NOT_FOUND");
+        }
 
-      // Create helpful vote and increment review's helpful count
-      await db.transaction(async (tx) => {
-        await tx.insert(helpfulVotes).values({ userId, reviewId });
-        await tx
-          .update(reviews)
+        // Check if user has already marked this review as helpful
+        const existingVote = await tx.query.helpfulVotes.findFirst({
+          where: and(
+            eq(helpfulVotes.userId, userId),
+            eq(helpfulVotes.reviewId, reviewId)
+          )
+        });
+
+        if (existingVote) {
+          throw new DatabaseError("Already marked as helpful", "CONFLICT");
+        }
+
+        // Create helpful vote
+        const insertResult = await tx.insert(helpfulVotes)
+          .values({
+            userId,
+            reviewId,
+          })
+          .returning();
+
+        if (!insertResult || insertResult.length === 0) {
+          throw new DatabaseError("Failed to record helpful vote", "INTERNAL_ERROR");
+        }
+
+        // Increment review's helpful count
+        const updateResult = await tx.update(reviews)
           .set({ helpfulCount: sql`${reviews.helpfulCount} + 1` })
-          .where(eq(reviews.id, reviewId));
+          .where(eq(reviews.id, reviewId))
+          .returning();
+
+        if (!updateResult || updateResult.length === 0) {
+          throw new DatabaseError("Failed to update review helpful count", "INTERNAL_ERROR");
+        }
+
+        return updateResult[0];
       });
 
-      res.json({ message: "Marked as helpful" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to mark review as helpful" });
+      res.json(result);
+    } catch (error: unknown) {
+      // Log detailed error information for POST /reviews/:id/helpful
+      console.error('Error in POST /reviews/:id/helpful:', {
+        error,
+        stack: error instanceof Error ? error.stack : undefined,
+        reviewId,
+        userId,
+        isAuthenticated: req.isAuthenticated(),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        isDatabaseError: error instanceof DatabaseError,
+        errorCode: error instanceof DatabaseError ? error.code : undefined,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      next(error);
     }
   });
 
-  return httpServer;
+  // Log all registered routes for debugging
+  console.log('Routes registered on router:', router.stack
+    .filter((r: any) => r.route)
+    .map((r: any) => {
+      const methods = Object.keys(r.route.methods || {});
+      return `${methods.join(',')} ${r.route.path}`;
+    })
+    .join('\n'));
+
+  return router;
 }

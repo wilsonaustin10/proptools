@@ -5,16 +5,7 @@ import { Button } from "./ui/button";
 import { StarIcon, ThumbsUp } from "lucide-react";
 import { useToast } from "../hooks/use-toast";
 import { useUser } from "../hooks/use-user";
-import type { Review } from "../../db/schema";
-
-
-interface ReviewWithUser extends Review {
-  user: {
-    username: string;
-    firstName: string;
-    lastName: string;
-  };
-}
+import type { ReviewWithUser } from "../../../shared/types/review";
 
 interface ReviewListProps {
   toolId: number;
@@ -84,7 +75,7 @@ export function ReviewList({ toolId }: ReviewListProps) {
                   {review.user.firstName} {review.user.lastName}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {new Date(review.createdAt).toLocaleDateString()}
+                  {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'N/A'}
                 </div>
               </div>
               <div className="flex">

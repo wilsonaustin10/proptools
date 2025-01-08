@@ -1,39 +1,66 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { db } from '@db';
-import { tools, users } from '@db/schema';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
+import { db } from '../../db';
+import { tools } from '../../db/schema';
 import supertest from 'supertest';
-import { app } from '../../server';
+import { createApp } from '../../server';
+import { sql, eq, like } from 'drizzle-orm';
+
+// Mock the database module
+vi.mock('../../db', () => {
+  const mockDb = {
+    select: vi.fn(),
+    insert: vi.fn(),
+    delete: vi.fn(),
+  };
+
+  return { db: mockDb };
+});
+
+const { app } = createApp();
 
 const request = supertest(app);
 
 describe('Tool Discovery E2E', () => {
   let testTools;
   
-  beforeAll(async () => {
-    // Create test tools
-    testTools = await db.insert(tools).values([
-      {
-        name: 'Popular Tool',
-        description: 'Most upvoted tool',
-        website: 'https://popular.com',
-        category: 'Popular',
-        upvotes: 100,
-      },
-      {
-        name: 'New Tool',
-        description: 'Recently added tool',
-        website: 'https://new.com',
-        category: 'New',
-        upvotes: 0,
-      },
-    ]).returning();
-  });
+  const mockTools = [
+    {
+      id: 1,
+      name: 'Popular Tool',
+      description: 'Most upvoted tool',
+      website: 'https://popular.com',
+      category: 'Popular',
+      upvotes: 100,
+    },
+    {
+      id: 2,
+      name: 'New Tool',
+      description: 'Recently added tool',
+      website: 'https://new.com',
+      category: 'New',
+      upvotes: 0,
+    },
+  ];
 
-  afterAll(async () => {
-    // Clean up test data
-    await db.delete(tools).where(tool => 
-      tool.id.in(testTools.map(t => t.id))
-    );
+  beforeEach(() => {
+    vi.clearAllMocks();
+    
+    // Mock database responses for tools
+    const mockExecute = vi.fn().mockResolvedValue(mockTools);
+    const mockWhere = vi.fn().mockReturnValue({ execute: mockExecute });
+    const mockFrom = vi.fn().mockReturnValue({ 
+      where: mockWhere,
+      execute: mockExecute,
+      orderBy: vi.fn().mockReturnValue({ execute: mockExecute })
+    });
+    
+    // Setup mocks with proper types
+    vi.mocked(db.select).mockImplementation(() => ({ 
+      from: mockFrom,
+      where: mockWhere,
+      orderBy: vi.fn().mockReturnValue({ execute: mockExecute }),
+      execute: mockExecute
+    }) as any);
   });
 
   describe('Tool Browsing', () => {
@@ -67,6 +94,7 @@ describe('Tool Discovery E2E', () => {
       
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
       expect(response.body.some(tool => tool.name.includes('Popular'))).toBe(true);
     });
   });
