@@ -1,13 +1,26 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import adminRoutes from "./routes/admin";
 import { db } from "@db";
-import { tools, upvotes, users, insertToolSchema } from "@db/schema";
+import { tools, upvotes, users, insertToolSchema, type Tool } from "@db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { emailService } from './services/email';
 import { extractMetadata } from './services/metadata';
 import bcrypt from 'bcrypt';
+
+interface Vote {
+  id: number;
+  userId: number;
+  toolId: number;
+  voteType: boolean;
+  category: string;
+  createdAt: Date;
+}
+
+interface ToolWithVotes extends Tool {
+  upvotes: Vote[];
+}
 
 declare module 'express-session' {
   interface SessionData {
@@ -112,39 +125,109 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Upvote a tool
-  app.post("/api/tools/:id/upvote", async (req, res) => {
+  // Vote on a tool in a specific category
+  app.post("/api/tools/:id/vote", async (req, res) => {
     if (!req.isAuthenticated()) {
-      return res.status(401).json({ error: "Must be logged in to upvote" });
+      return res.status(401).json({ error: "Must be logged in to vote" });
+    }
+
+    const { category, voteType } = req.body;
+    if (!category || typeof voteType !== 'boolean') {
+      return res.status(400).json({ error: "Category and vote type are required" });
     }
 
     const toolId = parseInt(req.params.id);
     const userId = req.user!.id;
 
     try {
-      // Check if user has already upvoted
-      const [existingUpvote] = await db
+      // Check if user has already voted in this category
+      const [existingVote] = await db
         .select()
         .from(upvotes)
-        .where(sql`${upvotes.userId} = ${userId} AND ${upvotes.toolId} = ${toolId}`)
+        .where(sql`${upvotes.userId} = ${userId} AND ${upvotes.toolId} = ${toolId} AND ${upvotes.category} = ${category}`)
         .limit(1);
 
-      if (existingUpvote) {
-        return res.status(400).json({ error: "Already upvoted" });
+      if (existingVote) {
+        return res.status(400).json({ error: "Already voted in this category" });
       }
 
-      // Create upvote and increment tool's upvote count
-      await db.transaction(async (tx) => {
-        await tx.insert(upvotes).values({ userId, toolId });
-        await tx
-          .update(tools)
-          .set({ upvotes: sql`${tools.upvotes} + 1` })
-          .where(eq(tools.id, toolId));
+      // Create vote
+      await db.insert(upvotes).values({ 
+        userId, 
+        toolId,
+        category,
+        voteType,
       });
 
-      res.json({ message: "Upvote successful" });
+      res.json({ message: "Vote successful" });
     } catch (error) {
-      res.status(500).json({ error: "Failed to upvote" });
+      res.status(500).json({ error: "Failed to vote" });
+    }
+  });
+
+  // Get tool rankings by category with time decay
+  app.get("/api/rankings", async (req, res) => {
+    try {
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      // Calculate rankings with time decay
+      const rankings = await db.query.tools.findMany({
+        with: {
+          upvotes: {
+            where: sql`${upvotes.createdAt} >= ${threeMonthsAgo}`,
+          },
+        },
+      });
+
+      // Process rankings with time decay
+      const categoryRankings = rankings.reduce((acc, tool) => {
+        const now = new Date();
+        
+        // Calculate score for each category
+        tool.categories.forEach(category => {
+          const categoryVotes = tool.upvotes.filter(vote => vote.category === category);
+          
+          // Calculate weighted score based on vote age
+          const score = categoryVotes.reduce((sum, vote) => {
+            const ageInDays = (now.getTime() - vote.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+            const weight = Math.max(0, 1 - (ageInDays / 90)); // Linear decay over 90 days
+            return sum + (vote.voteType ? weight : -weight);
+          }, 0);
+
+          if (!acc[category]) {
+            acc[category] = [];
+          }
+
+          acc[category].push({
+            id: tool.id,
+            name: tool.name,
+            score,
+            description: tool.description,
+            website: tool.website,
+            logo: tool.logo,
+          });
+        });
+
+        return acc;
+      }, {} as Record<string, Array<{
+        id: number;
+        name: string;
+        score: number;
+        description: string;
+        website: string;
+        logo?: string;
+      }>>);
+
+      // Sort each category by score
+      Object.keys(categoryRankings).forEach(category => {
+        categoryRankings[category].sort((a, b) => b.score - a.score);
+      });
+
+      res.json(categoryRankings);
+    } catch (error) {
+      console.error('Error fetching rankings:', error);
+      res.status(500).json({ error: "Failed to fetch rankings" });
     }
   });
 

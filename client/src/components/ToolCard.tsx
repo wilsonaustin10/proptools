@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ThumbsUp, Trophy } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Trophy } from "lucide-react";
 import type { Tool } from "@db/schema";
 import { TOOL_CATEGORIES } from "@/lib/constants";
 import { useUser } from "@/hooks/use-user";
@@ -9,6 +9,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+
+interface VoteResponse {
+  message: string;
+}
+
+interface VoteError {
+  error: string;
+}
 
 interface ToolCardProps {
   tool: Tool;
@@ -20,14 +28,17 @@ export default function ToolCard({ tool }: ToolCardProps) {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const upvoteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch(`/api/tools/${tool.id}/upvote`, {
+  const voteMutation = useMutation<VoteResponse, Error, { category: string; voteType: boolean }>({
+    mutationFn: async ({ category, voteType }) => {
+      const response = await fetch(`/api/tools/${tool.id}/vote`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
+        body: JSON.stringify({ category, voteType }),
       });
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errorData = (await response.json()) as VoteError;
+        throw new Error(errorData.error || "Failed to vote");
       }
       return response.json();
     },
@@ -93,22 +104,41 @@ export default function ToolCard({ tool }: ToolCardProps) {
           >
             Visit Website
           </Button>
-          <Button
-            variant={tool.upvotes && tool.upvotes > 0 ? "default" : "ghost"}
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              user && upvoteMutation.mutate();
-            }}
-            disabled={!user || upvoteMutation.isPending}
-            className="flex items-center gap-2"
-          >
-            <ThumbsUp className={cn(
-              "w-4 h-4",
-              tool.upvotes && tool.upvotes > 0 && "text-white"
-            )} />
-            <span>{tool.upvotes ?? 0}</span>
-          </Button>
+          <div className="flex flex-col gap-2">
+            {tool.categories.map((category) => (
+              <div key={category} className="flex items-center justify-between gap-2">
+                <Badge variant="outline">{category}</Badge>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      user && voteMutation.mutate({ category, voteType: true });
+                    }}
+                    disabled={!user || voteMutation.isPending}
+                    className="h-8 w-8 p-0"
+                    title="Upvote"
+                  >
+                    <ThumbsUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      user && voteMutation.mutate({ category, voteType: false });
+                    }}
+                    disabled={!user || voteMutation.isPending}
+                    className="h-8 w-8 p-0"
+                    title="Downvote"
+                  >
+                    <ThumbsDown className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>

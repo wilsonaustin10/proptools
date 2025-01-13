@@ -34,6 +34,8 @@ export const upvotes = pgTable("upvotes", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
   toolId: integer("tool_id").references(() => tools.id),
+  voteType: boolean("vote_type").notNull().default(true), // true = upvote, false = downvote
+  category: text("category").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
