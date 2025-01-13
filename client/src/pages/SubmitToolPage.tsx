@@ -1,4 +1,7 @@
 import { useForm } from "react-hook-form";
+import { TOOL_CATEGORIES } from "@/lib/constants";
+import { MultiSelect } from "@/components/ui/multi-select";
+import type { ToolForm } from "@/lib/validations/tool";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -52,7 +55,7 @@ export default function SubmitToolPage() {
       name: "",
       description: "",
       website: "",
-      category: "",
+      categories: [],
       logo: "",
       pricing: "",
     },
@@ -148,12 +151,17 @@ export default function SubmitToolPage() {
 
             <FormField
               control={form.control}
-              name="category"
+              name="categories"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category</FormLabel>
+                  <FormLabel>Categories</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter tool category" {...field} />
+                    <MultiSelect
+                      options={TOOL_CATEGORIES}
+                      selected={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select categories..."
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -212,4 +220,4 @@ export default function SubmitToolPage() {
       </div>
     </div>
   );
-}    
+}          

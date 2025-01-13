@@ -22,7 +22,7 @@ export const tools = pgTable("tools", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   website: text("website").notNull(),
-  category: text("category").notNull(),
+  categories: text("categories").notNull().$type<string[]>(), // Stored as JSON array of categories
   logo: text("logo"),
   pricing: text("pricing"),
   upvotes: integer("upvotes").default(0),

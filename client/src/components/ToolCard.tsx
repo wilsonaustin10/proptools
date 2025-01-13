@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThumbsUp, Trophy } from "lucide-react";
 import type { Tool } from "@db/schema";
+import { TOOL_CATEGORIES } from "@/lib/constants";
 import { useUser } from "@/hooks/use-user";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -69,7 +70,13 @@ export default function ToolCard({ tool }: ToolCardProps) {
           )}
           <div>
             <h3 className="font-semibold text-lg">{tool.name}</h3>
-            <Badge variant="secondary">{tool.category}</Badge>
+            <div className="flex flex-wrap gap-1">
+              {tool.categories.map((category) => (
+                <Badge key={category} variant="secondary">
+                  {category}
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
       </CardHeader>
