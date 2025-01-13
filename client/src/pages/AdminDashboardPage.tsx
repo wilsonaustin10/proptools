@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,12 +12,22 @@ import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { NewTool } from "@db/schema";
+import { TOOL_CATEGORIES, type ToolCategory } from "@/lib/constants";
+import { MultiSelect } from "@/components/ui/multi-select";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 const toolSchema = z.object({
   name: z.string().min(1, "Tool name is required"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   website: z.string().url("Must be a valid URL"),
-  category: z.string().min(1, "Category is required"),
+  categories: z.array(z.enum(TOOL_CATEGORIES)).min(1, "At least one category is required"),
   logo: z.string().optional(),
 });
 
@@ -37,7 +46,7 @@ export default function AdminDashboardPage() {
       name: "",
       description: "",
       website: "",
-      category: "",
+      categories: [],
       logo: "",
     },
   });
@@ -102,60 +111,86 @@ export default function AdminDashboardPage() {
           <CardTitle>Add New Tool</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Tool Name</Label>
-              <Input id="name" {...form.register("name")} />
-              {form.formState.errors.name && (
-                <p className="text-sm text-red-500">
-                  {form.formState.errors.name.message}
-                </p>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tool Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter tool name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="website">Website URL</Label>
-              <Input id="website" {...form.register("website")} />
-              {form.formState.errors.website && (
-                <p className="text-sm text-red-500">
-                  {form.formState.errors.website.message}
-                </p>
+            <FormField
+              control={form.control}
+              name="website"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Website URL</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter website URL" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Input id="category" {...form.register("category")} />
-              {form.formState.errors.category && (
-                <p className="text-sm text-red-500">
-                  {form.formState.errors.category.message}
-                </p>
+            <FormField
+              control={form.control}
+              name="categories"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Categories</FormLabel>
+                  <FormControl>
+                    <MultiSelect
+                      options={TOOL_CATEGORIES}
+                      selected={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select categories..."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="logo">Logo URL (Optional)</Label>
-              <Input id="logo" {...form.register("logo")} />
-              {form.formState.errors.logo && (
-                <p className="text-sm text-red-500">
-                  {form.formState.errors.logo.message}
-                </p>
+            <FormField
+              control={form.control}
+              name="logo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Logo URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter logo URL" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                {...form.register("description")}
-                rows={5}
-              />
-              {form.formState.errors.description && (
-                <p className="text-sm text-red-500">
-                  {form.formState.errors.description.message}
-                </p>
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter tool description"
+                      rows={5}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
             <Button
               type="submit"
@@ -167,7 +202,8 @@ export default function AdminDashboardPage() {
               ) : null}
               Add Tool
             </Button>
-          </form>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>

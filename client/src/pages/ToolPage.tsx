@@ -93,7 +93,7 @@ export default function ToolPage({ params }: { params: { id: string } }) {
               <div>
                 <h1 className="text-3xl font-bold">{tool.name}</h1>
                 <Badge variant="secondary" className="mt-2">
-                  {tool.category}
+                  {tool.categories.join(", ")}
                 </Badge>
               </div>
             </div>

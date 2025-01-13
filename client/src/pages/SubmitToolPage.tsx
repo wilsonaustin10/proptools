@@ -1,7 +1,6 @@
 import { useForm } from "react-hook-form";
 import { TOOL_CATEGORIES } from "@/lib/constants";
 import { MultiSelect } from "@/components/ui/multi-select";
-import type { ToolForm } from "@/lib/validations/tool";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -18,7 +17,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { toolSchema, type ToolForm, type NewTool } from "@/lib/validations/tool";
+import { toolSchema, type ToolForm } from "@/lib/validations/tool";
+import type { NewTool } from "@db/schema";
 import { useUser } from "@/contexts/user";
 
 export default function SubmitToolPage() {
@@ -220,4 +220,4 @@ export default function SubmitToolPage() {
       </div>
     </div>
   );
-}          
+}                         

@@ -15,10 +15,10 @@ interface Vote {
   toolId: number;
   voteType: boolean;
   category: string;
-  createdAt: Date;
+  createdAt: Date | null;
 }
 
-interface ToolWithVotes extends Tool {
+type ToolWithVotes = Omit<Tool, 'upvotes'> & {
   upvotes: Vote[];
 }
 
@@ -56,9 +56,24 @@ export function registerRoutes(app: Express): Server {
         pricing: metadata.pricing || `See ${result.data.website} for more information`
       };
 
+      const categories = (Array.isArray(toolData.categories) 
+        ? toolData.categories 
+        : [toolData.categories]).map(String);
+
+      const toolInsertData: typeof tools.$inferInsert = {
+        name: toolData.name,
+        description: toolData.description,
+        website: toolData.website,
+        categories,
+        logo: toolData.logo || null,
+        pricing: toolData.pricing || null,
+        featured: false,
+        upvotes: 0,
+      };
+
       const [newTool] = await db
         .insert(tools)
-        .values(toolData)
+        .values(toolInsertData)
         .returning();
 
       res.json(newTool);
@@ -101,7 +116,7 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/tools/category/:category", async (req, res) => {
     try {
       const categoryTools = await db.query.tools.findMany({
-        where: eq(tools.category, req.params.category),
+        where: sql`${tools.categories} @> ARRAY[${req.params.category}]::text[]`,
         orderBy: [desc(tools.upvotes)],
       });
       res.json(categoryTools);
@@ -125,7 +140,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Vote on a tool in a specific category
+  // Vote on a tool in a specific category (create, update, or remove vote)
   app.post("/api/tools/:id/vote", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Must be logged in to vote" });
@@ -148,10 +163,23 @@ export function registerRoutes(app: Express): Server {
         .limit(1);
 
       if (existingVote) {
-        return res.status(400).json({ error: "Already voted in this category" });
+        if (existingVote.voteType === voteType) {
+          // If voting the same way, remove the vote
+          await db
+            .delete(upvotes)
+            .where(sql`${upvotes.id} = ${existingVote.id}`);
+          return res.json({ message: "Vote removed" });
+        } else {
+          // If voting differently, update the vote
+          await db
+            .update(upvotes)
+            .set({ voteType })
+            .where(sql`${upvotes.id} = ${existingVote.id}`);
+          return res.json({ message: "Vote updated" });
+        }
       }
 
-      // Create vote
+      // Create new vote
       await db.insert(upvotes).values({ 
         userId, 
         toolId,
@@ -161,7 +189,8 @@ export function registerRoutes(app: Express): Server {
 
       res.json({ message: "Vote successful" });
     } catch (error) {
-      res.status(500).json({ error: "Failed to vote" });
+      console.error('Error handling vote:', error);
+      res.status(500).json({ error: "Failed to handle vote" });
     }
   });
 
@@ -190,7 +219,7 @@ export function registerRoutes(app: Express): Server {
           
           // Calculate weighted score based on vote age
           const score = categoryVotes.reduce((sum, vote) => {
-            const ageInDays = (now.getTime() - vote.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+            const ageInDays = vote.createdAt ? (now.getTime() - vote.createdAt.getTime()) / (1000 * 60 * 60 * 24) : 90;
             const weight = Math.max(0, 1 - (ageInDays / 90)); // Linear decay over 90 days
             return sum + (vote.voteType ? weight : -weight);
           }, 0);
@@ -205,7 +234,7 @@ export function registerRoutes(app: Express): Server {
             score,
             description: tool.description,
             website: tool.website,
-            logo: tool.logo,
+            logo: tool.logo || undefined,
           });
         });
 

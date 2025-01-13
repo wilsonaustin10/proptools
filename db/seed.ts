@@ -23,7 +23,7 @@ async function seed() {
         name: 'Zillow',
         description: 'Real estate marketplace and data platform',
         website: 'https://www.zillow.com',
-        category: 'marketplace',
+        categories: ['real estate data', 'marketplace'],
         logo: 'https://logo.clearbit.com/zillow.com',
         featured: true,
         upvotes: 0
@@ -32,7 +32,7 @@ async function seed() {
         name: 'Redfin',
         description: 'Real estate brokerage and search platform',
         website: 'https://www.redfin.com',
-        category: 'marketplace',
+        categories: ['real estate data', 'marketplace'],
         logo: 'https://logo.clearbit.com/redfin.com',
         featured: true,
         upvotes: 0
@@ -41,7 +41,7 @@ async function seed() {
         name: 'Realtor.com',
         description: 'Real estate listings and market insights',
         website: 'https://www.realtor.com',
-        category: 'marketplace',
+        categories: ['real estate data', 'marketplace'],
         logo: 'https://logo.clearbit.com/realtor.com',
         featured: false,
         upvotes: 0
@@ -58,4 +58,4 @@ async function seed() {
   }
 }
 
-seed(); 
+seed();   

@@ -80,7 +80,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
                   <div>
                     <div className="font-medium">{tool.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {tool.category}
+                      {tool.categories.join(", ")}
                     </div>
                   </div>
                 </CommandItem>
