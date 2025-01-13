@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -53,6 +54,7 @@ export default function SubmitToolPage() {
       website: "",
       category: "",
       logo: "",
+      pricing: "",
     },
   });
 
@@ -163,9 +165,26 @@ export default function SubmitToolPage() {
               name="logo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Logo URL</FormLabel>
+                  <FormLabel>Logo URL (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter logo URL" {...field} />
+                    <Input placeholder="Will be auto-populated from website" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pricing"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Pricing (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Will be auto-populated from website" 
+                      {...field} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -178,7 +197,14 @@ export default function SubmitToolPage() {
                 disabled={addToolMutation.isPending}
                 className="w-full sm:w-auto"
               >
-                {addToolMutation.isPending ? "Submitting..." : "Submit Tool"}
+                {addToolMutation.isPending ? (
+                  <>
+                    <span className="mr-2">Analyzing website...</span>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </>
+                ) : (
+                  "Submit Tool"
+                )}
               </Button>
             </div>
           </form>
@@ -186,4 +212,4 @@ export default function SubmitToolPage() {
       </div>
     </div>
   );
-} 
+}    

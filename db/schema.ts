@@ -24,6 +24,7 @@ export const tools = pgTable("tools", {
   website: text("website").notNull(),
   category: text("category").notNull(),
   logo: text("logo"),
+  pricing: text("pricing"),
   upvotes: integer("upvotes").default(0),
   featured: boolean("featured").default(false),
   createdAt: timestamp("created_at").defaultNow(),

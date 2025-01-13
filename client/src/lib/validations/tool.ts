@@ -6,7 +6,8 @@ export const toolSchema = z.object({
   website: z.string().url("Must be a valid URL"),
   category: z.string().min(1, "Category is required"),
   logo: z.string().optional(),
+  pricing: z.string().optional(),
 });
 
 export type ToolForm = z.infer<typeof toolSchema>;
-export type NewTool = ToolForm; 
+export type NewTool = ToolForm;   

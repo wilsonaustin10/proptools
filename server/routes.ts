@@ -1,10 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
+import adminRoutes from "./routes/admin";
 import { db } from "@db";
 import { tools, upvotes, users, insertToolSchema } from "@db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { emailService } from './services/email';
+import { extractMetadata } from './services/metadata';
 import bcrypt from 'bcrypt';
 
 declare module 'express-session' {
@@ -15,11 +17,12 @@ declare module 'express-session' {
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+  app.use('/api', adminRoutes);
 
-  // Add a new tool (admin only)
+  // Add a new tool (any authenticated user)
   app.post("/api/tools", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user?.isAdmin) {
-      return res.status(401).json({ error: "Unauthorized" });
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Must be logged in to submit tools" });
     }
 
     try {
@@ -30,9 +33,19 @@ export function registerRoutes(app: Express): Server {
           .json({ error: "Invalid input: " + result.error.issues.map(i => i.message).join(", ") });
       }
 
+      // Extract metadata from website
+      const metadata = await extractMetadata(result.data.website);
+      
+      const toolData = {
+        ...result.data,
+        description: result.data.description.trim() || metadata.description || "No description available yet",
+        logo: result.data.logo || metadata.logo,
+        pricing: metadata.pricing || `See ${result.data.website} for more information`
+      };
+
       const [newTool] = await db
         .insert(tools)
-        .values(result.data)
+        .values(toolData)
         .returning();
 
       res.json(newTool);
