@@ -1,4 +1,5 @@
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import { getApiUrl } from '@/lib/api';
 
 interface User {
   id: number;
@@ -24,7 +25,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Fetch user on mount
   useEffect(() => {
-    fetch('/api/user', { credentials: 'include' })
+    fetch(getApiUrl('api/user'), { credentials: 'include' })
       .then(async (res) => {
         if (res.ok) {
           const data = await res.json();
@@ -37,7 +38,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (credentials: { username: string; password: string }) => {
-    const res = await fetch('/api/login', {
+    const res = await fetch(getApiUrl('api/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -57,7 +58,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: { username: string; password: string; firstName: string; lastName: string; email: string }) => {
-    const res = await fetch('/api/register', {
+    const res = await fetch(getApiUrl('api/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -77,7 +78,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    const res = await fetch('/api/logout', {
+    const res = await fetch(getApiUrl('api/logout'), {
       method: 'POST',
       credentials: 'include',
     });
@@ -105,4 +106,4 @@ export function useUser() {
     throw new Error('useUser must be used within a UserProvider');
   }
   return context;
-} 
+}   

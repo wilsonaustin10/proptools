@@ -1,58 +1,59 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, type AnyColumn } from "drizzle-orm/sqlite-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { z } from "zod";
+import type { TableConfig, Column } from "drizzle-orm";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").unique().notNull(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  username: text("username").notNull().unique(),
   password: text("password").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  email: text("email").unique().notNull(),
-  isAdmin: boolean("is_admin").default(false),
-  isVerified: boolean("is_verified").default(false),
+  email: text("email").notNull().unique(),
+  isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+  isVerified: integer("is_verified", { mode: "boolean" }).notNull().default(false),
   verificationToken: text("verification_token"),
-  verificationTokenExpiry: timestamp("verification_token_expiry"),
-  createdAt: timestamp("created_at").defaultNow(),
+  verificationTokenExpiry: integer("verification_token_expiry"),
+  createdAt: integer("created_at").notNull().default(Date.now()),
 });
 
-export const tools = pgTable("tools", {
-  id: serial("id").primaryKey(),
+export const tools = sqliteTable("tools", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description").notNull(),
   website: text("website").notNull(),
-  categories: text("categories").notNull().$type<string[]>(), // Stored as JSON array of categories
+  categories: text("categories").notNull(), // Stored as JSON string
   logo: text("logo"),
   pricing: text("pricing"),
   upvotes: integer("upvotes").default(0),
-  featured: boolean("featured").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+  featured: integer("featured", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull().default(Date.now()),
 });
 
-export const upvotes = pgTable("upvotes", {
-  id: serial("id").primaryKey(),
+export const upvotes = sqliteTable("upvotes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("user_id").references(() => users.id),
   toolId: integer("tool_id").references(() => tools.id),
-  voteType: boolean("vote_type").notNull().default(true), // true = upvote, false = downvote
+  voteType: integer("vote_type", { mode: "boolean" }).notNull().default(true),
   category: text("category").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at").notNull().default(Date.now()),
 });
 
-export const toolsRelations = relations(tools, ({ many }) => ({
-  upvotes: many(upvotes),
+export const toolsRelations = relations(tools as any, ({ many }) => ({
+  upvotes: many(upvotes as any),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
-  upvotes: many(upvotes),
+export const usersRelations = relations(users as any, ({ many }) => ({
+  upvotes: many(upvotes as any),
 }));
 
-export const upvotesRelations = relations(upvotes, ({ one }) => ({
-  user: one(users, {
+export const upvotesRelations = relations(upvotes as any, ({ one }) => ({
+  user: one(users as any, {
     fields: [upvotes.userId],
     references: [users.id],
   }),
-  tool: one(tools, {
+  tool: one(tools as any, {
     fields: [upvotes.toolId],
     references: [tools.id],
   }),
